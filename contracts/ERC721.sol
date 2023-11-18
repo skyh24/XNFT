@@ -27,10 +27,10 @@ contract ERC721 is IERC721, IERC721Metadata{
     //  owner地址。到operator地址 的批量授权映射
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
-    // Skyh: ownedTokens list
-    mapping(address => uint[]) public _ownedTokens;
-    // Skyh: last tokenTransfer
-    mapping(address => uint) public _tokenTransfer;
+    // Skyh: 拥有的Token 列表
+    mapping(address => uint[]) public ownedTokens;
+    // Skyh: 转移最后一个Token
+    mapping(address => uint) public tokenTransfer;
 
     /**
      * 构造函数，初始化`name` 和`symbol` .
@@ -139,6 +139,24 @@ contract ERC721 is IERC721, IERC721Metadata{
         _balances[to] += 1;
         _owners[tokenId] = to;
 
+        // change tokenTransfer last element
+        tokenTransfer[owner] = tokenId;
+        // change ownedTokens
+        ownedTokens[to].push(tokenId);
+        uint[] storage tokens = ownedTokens[owner];
+        uint tokenLength = tokens.length;
+        if (tokenLength == 1) {
+            tokens.pop();
+        } else {
+            for (uint i=0; i<tokenLength; i++) {
+                if (tokens[i] == tokenId) {
+                    tokens[i] = tokens[tokenLength - 1]; // swap last element
+                    break;
+                }
+            }
+            tokens.pop();
+        }
+
         emit Transfer(from, to, tokenId);
     }
     
@@ -210,9 +228,12 @@ contract ERC721 is IERC721, IERC721Metadata{
     function _mint(address to, uint tokenId) internal virtual {
         require(to != address(0), "mint to zero address");
         require(_owners[tokenId] == address(0), "token already minted");
+        require(_balances[to] < 3, "nft balance over 3"); // 超过3个不给mint
 
         _balances[to] += 1;
         _owners[tokenId] = to;
+
+        ownedTokens[to].push(tokenId);
 
         emit Transfer(address(0), to, tokenId);
     }
@@ -257,7 +278,9 @@ contract ERC721 is IERC721, IERC721Metadata{
         require(_owners[tokenId] != address(0), "Token Not Exist");
 
         string memory baseURI = _baseURI();
-        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
+        // 超过会显示10000内图片
+        uint256 id = tokenId % MAX_APES;
+        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, id.toString())) : "";
     }
 
     /**
